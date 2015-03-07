@@ -1,6 +1,30 @@
+# == Class: examdb
+#
+# Setup exam database instance
+#
+# === Parameters
+#
+# [*server_domain*]
+#   the domain name of the server
+#
+# === Examples
+#
+#  class { 'examdb':
+#    server_domain => 'exams.example.com' ,
+#  }
+#
+# === Authors
+#
+# Pan Luo <pan.luo@ubc.ca>
+#
+# === Copyright
+#
+#  Centre for Teaching, Learning and Technology, University of British Columbia
+#
 class examdb (
   $server_domain = undef,
   $appname = 'examdb',
+  $appuser = 'app',
   $project_name = 'ubc/examdb',
   $doc_base = '/www_data/app',
   $web_root = 'web',
@@ -23,6 +47,7 @@ class examdb (
 
   case $::osfamily {
     'RedHat': {
+      include epel
       case $::operatingsystemrelease {
         /^5.*/,/^6.*/: {
           include ius
@@ -44,24 +69,27 @@ class examdb (
           fail("Unsupported platform: ${::operatingsystem} ${::operatingsystemrelease}")
         }
       }
-      $php_extensions = {
+      $php_extensions_base = {
         'pecl-zendopcache' => {
           settings => {
-            'OpCache/opcache.enable'      => '1',
-            'OpCache/opcache.use_cwd'     => '1',
+            'OpCache/opcache.enable'        => '1',
+            'OpCache/opcache.use_cwd'       => '1',
             'OpCache/opcache.save_comments' => '1',
             'OpCache/opcache.load_comments' => '1',
           }
         },
-        'xml' => {},
-        'mcrypt' => {},
-        'pdo' => {},
+        'xml'        => {},
+        'mcrypt'     => {},
+        'pdo'        => {},
         'pecl-mongo' => {},
-        'mbstring' => {},
-        'intl' => {},
-        'mysql' => {},
+        'mbstring'   => {},
+        'intl'       => {},
+        'mysql'      => {},
       }
-      $nginx_user = 'nginx'
+      $php_extensions_dev = {
+        'pecl-xdebug' => {},
+      }
+      $nginx_user  = 'nginx'
       $nginx_group = 'nginx'
     }
     'Debian': {
@@ -75,9 +103,14 @@ class examdb (
       }
       $php_package_prefix = undef
       $php_require = [Package['nginx']]
-      $php_extensions = {
+      $php_extensions_base = {
         'mcrypt' => {},
-        'mongo' => {},
+        'curl'   => {},
+        'xsl'    => {},
+        'mysql'  => {},
+      }
+      $php_extensions_dev = {
+        'xdebug' => {},
       }
       $nginx_user = 'www-data'
       $nginx_group = 'www-data'
@@ -87,11 +120,21 @@ class examdb (
     }
   }
 
+  $php_extensions = $environment ? {
+    'production' => $php_extensions_base,
+    default      => merge($php_extensions_base, $php_extensions_dev),
+  }
+
+  $dev = $environment ? {
+    'production' => false,
+    default      => true,
+  }
+
   # we need an app user to run composer install as bower complains being running as root
-  user { 'app':
+  user { $appuser:
     ensure  => present,
     groups  => [$nginx_group],
-    home    => '/tmp',
+    shell   => '/bin/bash',
     require => Package['nginx'],
   }
 
@@ -145,18 +188,18 @@ class examdb (
 
   file { $base_dir:
     ensure  => present,
-    owner   => 'app',
+    owner   => $appuser,
     mode    => '0755',
-    require => User['app'],
+    require => User[$appuser],
   }->
 
   composer::project { $appname:
     project_name => $project_name,
-    target_dir => $doc_base,
-    stability => 'dev',
-    keep_vcs  => true,
-    dev       => $dev,
-    user      => 'app',
+    target_dir   => $doc_base,
+    stability    => 'dev',
+    keep_vcs     => true,
+    dev          => $dev,
+    user         => $appuser,
   }->
 
   composer::exec { "${appname}-install":
@@ -166,24 +209,30 @@ class examdb (
       timeout     => 0,
       dev         => false,
       prefer_dist => true,
-      user        => 'app',
+      user        => $appuser,
       interaction => false,
       unless      => "test -f ${doc_base}/vendor/autoload.php",
   }
 
-  $writable_absolute_dirs = prefix($writable_dirs, "$doc_base/")
+  $writable_absolute_dirs = prefix($writable_dirs, "${doc_base}/")
   if $writable_dirs {
     file { $writable_absolute_dirs:
       ensure  => directory,
       owner   => $nginx_user,
-      recurse => true, 
+      recurse => true,
       require => Composer::Exec["${appname}-install"]
-     }
+    } ->
+    fooacl::conf { $writable_absolute_dirs:
+      permissions => [
+        "user:${appuser}:rwX",
+        "user:${nginx_user}:rwX",
+      ],
+    }
   }
 
 
   $server_name = $server_domain ? {
-      undef => $::fqdn,
+      undef   => $::fqdn,
       default => $server_domain,
   }
 
@@ -197,47 +246,66 @@ class examdb (
     ],
   }
 
-  nginx::resource::vhost {$server_name:
-    ensure              => present,
-    www_root            => "${doc_base}/${web_root}",
-    location_cfg_append => { 'rewrite' => '^ https://$server_name$request_uri? permanent' },
+  if $ssl {
+    $real_port = 443
+    $vhost_name = "${server_name} ssl"
+    nginx::resource::vhost {$server_name:
+      ensure              => present,
+      www_root            => "${doc_base}/${web_root}",
+      location_cfg_append => {
+        'rewrite' => '^ https://$server_name$request_uri? permanent'
+      },
+    }
+  } else {
+    $real_port = 80
+    $vhost_name = $server_name
   }
 
-  nginx::resource::vhost {"$server_name ssl":
-    ensure               => present,
-    www_root             => "${doc_base}/${web_root}",
-    listen_port		 => 443,
-    server_name          => [$server_name],
-    vhost_cfg_prepend    => {
+  if $environment == 'production' {
+    $nginx_location = '~ ^/app\.php(/|$)'
+    $nginx_location_cfg_prepend = {
+      fastcgi_read_timeout => 600,
+      'internal'           => ''
+    }
+  } else {
+    $nginx_location = '~ ^/(app_dev|app|config)\.php(/|$)'
+    $nginx_location_cfg_prepend = {
+      fastcgi_read_timeout => 600,
+    }
+  }
+
+  nginx::resource::vhost {$vhost_name:
+    ensure            => present,
+    www_root          => "${doc_base}/${web_root}",
+    listen_port       => $real_port,
+    server_name       => [$server_name],
+    vhost_cfg_prepend => {
       'add_header' => "X-APP-Server ${::hostname}"
     },
-    ssl                  => $ssl,
-    ssl_cert             => $ssl_cert,
-    ssl_key              => $ssl_key,
-    proxy_set_header     => ['Host $host', 'X-Real-IP $remote_addr', 'X-Forwarded-For $proxy_add_x_forwarded_for'],
-    try_files		 => ['$uri /app.php$is_args$args'],
+    ssl               => $ssl,
+    ssl_cert          => $ssl_cert,
+    ssl_key           => $ssl_key,
+    proxy_set_header  => ['Host $host', 'X-Real-IP $remote_addr', 'X-Forwarded-For $proxy_add_x_forwarded_for'],
+    try_files         => ['$uri /app.php$is_args$args'],
   }
 
   nginx::resource::location { "php_${server_name}":
     ensure               => present,
-    vhost                => "$server_name ssl",
-    location             => '~ ^/app\.php(/|$)',
-    ssl			 => true,
-    ssl_only		 => true,
+    vhost                => $vhost_name,
+    location             => $nginx_location,
+    ssl                  => $ssl,
+    ssl_only             => $ssl,
     fastcgi              => 'app',
     fastcgi_split_path   => '^(.+\.php)(/.*)$',
     fastcgi_script       => "${doc_base}/${web_root}/\$fastcgi_script_name",
     fastcgi_param        => {
-      'HTTPS'		=> '$https',
+      'HTTPS' => '$https',
     },
-    location_cfg_prepend => {
-      fastcgi_read_timeout => 600,
-      'internal' => ''
-    },
+    location_cfg_prepend => $nginx_location_cfg_prepend,
   }
 
   $real_ports = $ssl ? {
-    true => [$port, '443'],
+    true    => [$port, '443'],
     default => [$port]
   }
 
