@@ -151,6 +151,7 @@ class examdb (
     require        => $php_require,
     settings       => {
         'Date/date.timezone' => $timezone,
+  	'PHP/upload_max_filesize' => '100MB',
     },
   } ->
 
