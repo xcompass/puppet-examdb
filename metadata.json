@@ -16,6 +16,7 @@
     {"name":"puppetlabs-firewall","version_requirement":">= 1.4.0"},
     {"name":"puppetlabs-mysql","version_requirement":">= 3.3.0"},
     {"name":"thias-fooacl","version_requirement":">= 1.0.1"}
+    {"name":"tahnma-epel","version_requirement":">= 1.0.2"}
   ],
   "operatingsystem_support": [
       {
