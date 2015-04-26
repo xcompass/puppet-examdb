@@ -17,6 +17,8 @@
     {"name":"puppetlabs-mysql","version_requirement":">= 3.3.0"},
     {"name":"thias-fooacl","version_requirement":">= 1.0.1"}
     {"name":"tahnma-epel","version_requirement":">= 1.0.2"}
+    {"name":"kemra102-ius","version_requirement":">= 1.0.1"}
+    {"name":"fsalum-redis","version_requirement":">= 1.0.3"}
   ],
   "operatingsystem_support": [
       {

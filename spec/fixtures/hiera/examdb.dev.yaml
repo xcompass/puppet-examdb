@@ -1,6 +1,7 @@
 ---
 classes:
   - examdb
+  - examdb::cache
   - mysql::server
   - mysql::client
 

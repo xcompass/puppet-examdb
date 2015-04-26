@@ -9,9 +9,9 @@ end
 
 examdb = {
   :'centos66' => { :memory => '512', :ip => '10.1.1.10', :box => 'puppetlabs/centos-6.6-64-puppet',   :domain => 'examdb.dev' },
-  :'centos7'  => { :memory => '512', :ip => '10.1.1.11', :box => 'puppetlabs/centos-7.0-64-puppet',   :domain => 'learninglocker.local' },
-  :'precise'  => { :memory => '512', :ip => '10.1.1.20', :box => 'puppetlabs/ubuntu-12.04-64-puppet', :domain => 'learninglocker.local' },
-  :'trusty'   => { :memory => '512', :ip => '10.1.1.21', :box => 'puppetlabs/ubuntu-14.04-64-puppet', :domain => 'learninglocker.local' },
+  :'centos7'  => { :memory => '512', :ip => '10.1.1.11', :box => 'puppetlabs/centos-7.0-64-puppet',   :domain => 'examdb.dev' },
+  :'precise'  => { :memory => '512', :ip => '10.1.1.20', :box => 'puppetlabs/ubuntu-12.04-64-puppet', :domain => 'examdb.dev' },
+  :'trusty'   => { :memory => '512', :ip => '10.1.1.21', :box => 'puppetlabs/ubuntu-14.04-64-puppet', :domain => 'examdb.dev' },
 }
 Vagrant.configure("2") do |config|
   examdb.each_pair do |name, opts|
@@ -38,6 +38,7 @@ Vagrant.configure("2") do |config|
         puppet module install thias-fooacl
         puppet module install stahnma-epel
         puppet module install kemra102-ius
+        puppet module install fsalum-redis
       SHELL
 
       n.vm.provision "puppet" do |puppet|

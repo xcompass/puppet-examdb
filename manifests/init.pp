@@ -85,6 +85,7 @@ class examdb (
         'mbstring'   => {},
         'intl'       => {},
         'mysql'      => {},
+        'pecl-redis' => {},
       }
       $php_extensions_dev = {
         'pecl-xdebug' => {},
@@ -108,6 +109,7 @@ class examdb (
         'curl'   => {},
         'xsl'    => {},
         'mysql'  => {},
+        'redis'  => {},
       }
       $php_extensions_dev = {
         'xdebug' => {},
