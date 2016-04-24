@@ -48,14 +48,34 @@ class examdb (
   case $::osfamily {
     'RedHat': {
       include epel
+      $install_pear = false
+      $install_php_dev = false
       case $::operatingsystemrelease {
         /^5.*/,/^6.*/: {
           include ius
-          $php_package_prefix = 'php54-'
-          $composer_php_package = 'php54-cli'
+          $php_package_prefix = 'php55u-'
+          $composer_php_package = 'php55u-cli'
           $php_require = [Package['nginx'], Class['ius']]
           $manage_nodejs_repo = true
           $nodejs_require = [Yumrepo['epel']]
+          $php_extensions_base = {
+            'opcache' => {
+              settings => {
+                'OpCache/opcache.enable'        => '1',
+                'OpCache/opcache.use_cwd'       => '1',
+                'OpCache/opcache.save_comments' => '1',
+                'OpCache/opcache.load_comments' => '1',
+              }
+            },
+            'xml'        => {},
+            'mcrypt'     => {},
+            'pdo'        => {},
+            'pecl-mongo' => {},
+            'mbstring'   => {},
+            'intl'       => {},
+            'mysqlnd'    => {},
+            'pecl-redis' => {},
+          }
         }
         /^7.*/: {
           include epel
@@ -64,28 +84,28 @@ class examdb (
           $php_require = [Package['nginx'], Yumrepo['epel']]
           $manage_nodejs_repo = false
           $nodejs_require = [Yumrepo['epel']]
+          $php_extensions_base = {
+            'pecl-zendopcache'=> {
+              settings => {
+                'OpCache/opcache.enable'        => '1',
+                'OpCache/opcache.use_cwd'       => '1',
+                'OpCache/opcache.save_comments' => '1',
+                'OpCache/opcache.load_comments' => '1',
+              }
+            },
+            'xml'        => {},
+            'mcrypt'     => {},
+            'pdo'        => {},
+            'pecl-mongo' => {},
+            'mbstring'   => {},
+            'intl'       => {},
+            'mysqlnd'    => {},
+            'pecl-redis' => {},
+          }
         }
         default: {
           fail("Unsupported platform: ${::operatingsystem} ${::operatingsystemrelease}")
         }
-      }
-      $php_extensions_base = {
-        'pecl-zendopcache' => {
-          settings => {
-            'OpCache/opcache.enable'        => '1',
-            'OpCache/opcache.use_cwd'       => '1',
-            'OpCache/opcache.save_comments' => '1',
-            'OpCache/opcache.load_comments' => '1',
-          }
-        },
-        'xml'        => {},
-        'mcrypt'     => {},
-        'pdo'        => {},
-        'pecl-mongo' => {},
-        'mbstring'   => {},
-        'intl'       => {},
-        'mysql'      => {},
-        'pecl-redis' => {},
       }
       $php_extensions_dev = {
         'pecl-xdebug' => {},
@@ -97,20 +117,33 @@ class examdb (
       case $::operatingsystemrelease {
         12.04: {
           $manage_nodejs_repo = true
+          $install_pear = true
+          $install_php_dev = true
+          $php_extensions_base = {
+            'mcrypt' => {},
+            'curl'   => {},
+            'xsl'    => {},
+            'mysql'  => {},
+            'redis'  => {
+              provider => pecl,
+            },
+          }
         }
         default: {
           $manage_nodejs_repo = true
+          $install_pear = false
+          $install_php_dev = false
+          $php_extensions_base = {
+            'mcrypt' => {},
+            'curl'   => {},
+            'xsl'    => {},
+            'mysql'  => {},
+            'redis'  => {},
+          }
         }
       }
       $php_package_prefix = undef
       $php_require = [Package['nginx']]
-      $php_extensions_base = {
-        'mcrypt' => {},
-        'curl'   => {},
-        'xsl'    => {},
-        'mysql'  => {},
-        'redis'  => {},
-      }
       $php_extensions_dev = {
         'xdebug' => {},
       }
@@ -146,14 +179,14 @@ class examdb (
     fpm            => false,
     composer       => false,
     phpunit        => false,
-    dev            => false,
-    pear           => false,
+    dev            => $install_php_dev,
+    pear           => $install_pear,
     package_prefix => $php_package_prefix,
     extensions     => $php_extensions,
     require        => $php_require,
     settings       => {
         'Date/date.timezone' => $timezone,
-  	'PHP/upload_max_filesize' => '100MB',
+        'PHP/upload_max_filesize' => '100MB',
     },
   } ->
 
