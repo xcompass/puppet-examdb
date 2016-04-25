@@ -110,7 +110,7 @@ class examdb (
       $php_extensions_dev = {
         'pecl-xdebug' => {},
       }
-      $nginx_user  = 'nginx'
+      $nginx_user  = $appuser
       $nginx_group = 'nginx'
     }
     'Debian': {
@@ -147,7 +147,7 @@ class examdb (
       $php_extensions_dev = {
         'xdebug' => {},
       }
-      $nginx_user = 'www-data'
+      $nginx_user = $appuser
       $nginx_group = 'www-data'
     }
     default: {
@@ -257,13 +257,13 @@ class examdb (
       owner   => $nginx_user,
       recurse => true,
       require => Composer::Exec["${appname}-install"]
-    } ->
-    fooacl::conf { $writable_absolute_dirs:
-      permissions => [
-        "user:${appuser}:rwX",
-        "user:${nginx_user}:rwX",
-      ],
     }
+    #->
+    #fooacl::conf { $writable_absolute_dirs:
+    #  permissions => [
+    #    "user:${appuser}:rwX",
+    #  ],
+    #}
   }
 
 
